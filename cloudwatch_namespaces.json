@@ -1,0 +1,98 @@
+{
+  "namespaces": [
+    {
+      "namespace": "AWS/EC2",
+      "description": "Amazon Elastic Compute Cloud",
+      "common_metrics": [
+        "CPUUtilization",
+        "NetworkIn",
+        "NetworkOut",
+        "DiskReadOps",
+        "DiskWriteOps",
+        "DiskReadBytes",
+        "DiskWriteBytes"
+      ],
+      "dimensions": [
+        "InstanceId",
+        "ImageId",
+        "InstanceType"
+      ]
+    },
+    {
+      "namespace": "AWS/RDS",
+      "description": "Amazon Relational Database Service",
+      "common_metrics": [
+        "CPUUtilization",
+        "DatabaseConnections",
+        "FreeableMemory",
+        "FreeStorageSpace",
+        "ReadIOPS",
+        "WriteIOPS"
+      ],
+      "dimensions": [
+        "DBInstanceIdentifier",
+        "DBClusterIdentifier"
+      ]
+    },
+    {
+      "namespace": "AWS/Lambda",
+      "description": "AWS Lambda Functions",
+      "common_metrics": [
+        "Invocations",
+        "Duration",
+        "Errors",
+        "Throttles",
+        "DeadLetterErrors",
+        "ConcurrentExecutions"
+      ],
+      "dimensions": [
+        "FunctionName",
+        "Resource"
+      ]
+    },
+    {
+      "namespace": "AWS/ApplicationELB",
+      "description": "Application Load Balancer",
+      "common_metrics": [
+        "RequestCount",
+        "TargetResponseTime",
+        "HTTPCode_Target_2XX_Count",
+        "HTTPCode_Target_4XX_Count",
+        "HTTPCode_Target_5XX_Count"
+      ],
+      "dimensions": [
+        "LoadBalancer",
+        "TargetGroup"
+      ]
+    },
+    {
+      "namespace": "AWS/S3",
+      "description": "Amazon Simple Storage Service",
+      "common_metrics": [
+        "BucketSizeBytes",
+        "NumberOfObjects",
+        "AllRequests",
+        "GetRequests",
+        "PutRequests"
+      ],
+      "dimensions": [
+        "BucketName",
+        "StorageType"
+      ]
+    },
+    {
+      "namespace": "AWS/ECS",
+      "description": "Amazon Elastic Container Service",
+      "common_metrics": [
+        "CPUUtilization",
+        "MemoryUtilization",
+        "RunningTaskCount",
+        "PendingTaskCount"
+      ],
+      "dimensions": [
+        "ServiceName",
+        "ClusterName"
+      ]
+    }
+  ]
+}
