@@ -1,95 +1,60 @@
-# Tạo dữ liệu về các AWS namespaces và metrics phổ biến
-import json
+# Phân tích vấn đề với CloudWatch Chart Exporter
+print("=== PHÂN TÍCH VẤN ĐỀ VỚI AWS CLOUDWATCH CHART EXPORTER ===")
+print()
 
-# Dữ liệu về các namespace và metrics phổ biến trong CloudWatch
-cloudwatch_data = {
-    "namespaces": [
-        {
-            "namespace": "AWS/EC2",
-            "description": "Amazon Elastic Compute Cloud",
-            "common_metrics": [
-                "CPUUtilization",
-                "NetworkIn",
-                "NetworkOut", 
-                "DiskReadOps",
-                "DiskWriteOps",
-                "DiskReadBytes",
-                "DiskWriteBytes"
-            ],
-            "dimensions": ["InstanceId", "ImageId", "InstanceType"]
-        },
-        {
-            "namespace": "AWS/RDS",
-            "description": "Amazon Relational Database Service", 
-            "common_metrics": [
-                "CPUUtilization",
-                "DatabaseConnections",
-                "FreeableMemory",
-                "FreeStorageSpace",
-                "ReadIOPS",
-                "WriteIOPS"
-            ],
-            "dimensions": ["DBInstanceIdentifier", "DBClusterIdentifier"]
-        },
-        {
-            "namespace": "AWS/Lambda",
-            "description": "AWS Lambda Functions",
-            "common_metrics": [
-                "Invocations",
-                "Duration", 
-                "Errors",
-                "Throttles",
-                "DeadLetterErrors",
-                "ConcurrentExecutions"
-            ],
-            "dimensions": ["FunctionName", "Resource"]
-        },
-        {
-            "namespace": "AWS/ApplicationELB",
-            "description": "Application Load Balancer",
-            "common_metrics": [
-                "RequestCount",
-                "TargetResponseTime",
-                "HTTPCode_Target_2XX_Count",
-                "HTTPCode_Target_4XX_Count",
-                "HTTPCode_Target_5XX_Count"
-            ],
-            "dimensions": ["LoadBalancer", "TargetGroup"]
-        },
-        {
-            "namespace": "AWS/S3",
-            "description": "Amazon Simple Storage Service",
-            "common_metrics": [
-                "BucketSizeBytes",
-                "NumberOfObjects",
-                "AllRequests",
-                "GetRequests",
-                "PutRequests"
-            ],
-            "dimensions": ["BucketName", "StorageType"]
-        },
-        {
-            "namespace": "AWS/ECS",
-            "description": "Amazon Elastic Container Service",
-            "common_metrics": [
-                "CPUUtilization",
-                "MemoryUtilization",
-                "RunningTaskCount",
-                "PendingTaskCount"
-            ],
-            "dimensions": ["ServiceName", "ClusterName"]
-        }
-    ]
-}
+print("🔍 NGUYÊN NHÂN GỐC RỮA CỦA VẤN ĐỀ:")
+print("Từ lệnh AWS CLI của bạn thành công:")
+print('aws cloudwatch get-metric-widget-image --region ap-southeast-1 \\')
+print('    --metric-widget \'{"metrics":[["AWS/EC2","CPUUtilization","InstanceId","i-0b7c8d02813c56a21"]]}\' \\')
+print('    --output-format png \\')
+print('    --output text | base64 --decode > image.png')
+print()
 
-# Lưu dữ liệu thành JSON file
-with open('cloudwatch_namespaces.json', 'w', encoding='utf-8') as f:
-    json.dump(cloudwatch_data, f, indent=2, ensure_ascii=False)
+print("📋 CÁC VẤN ĐỀ THƯỜNG GẶP VỚI APP WEB:")
+issues = [
+    {
+        "issue": "Thiếu field 'view': 'timeSeries'",
+        "description": "JSON widget configuration thiếu field view bắt buộc",
+        "severity": "HIGH"
+    },
+    {
+        "issue": "CORS Configuration",
+        "description": "Browser không thể gọi CloudWatch API do CORS restrictions",
+        "severity": "CRITICAL"
+    },
+    {
+        "issue": "Credentials trong Browser",
+        "description": "AWS credentials không được handle đúng cách trong browser environment",
+        "severity": "HIGH"
+    },
+    {
+        "issue": "Response Format",
+        "description": "API trả về XML format nhưng app expect JSON",
+        "severity": "MEDIUM"
+    },
+    {
+        "issue": "Region Configuration",
+        "description": "Region setting không đúng hoặc thiếu",
+        "severity": "LOW"
+    }
+]
 
-print("✅ Đã tạo file cloudwatch_namespaces.json")
+for i, issue in enumerate(issues, 1):
+    print(f"{i}. {issue['issue']} ({issue['severity']})")
+    print(f"   → {issue['description']}")
+    print()
 
-# Hiển thị một phần dữ liệu
-for ns in cloudwatch_data["namespaces"][:3]:
-    print(f"\n📊 {ns['namespace']} - {ns['description']}")
-    print(f"   Metrics: {', '.join(ns['common_metrics'][:3])}...")
-    print(f"   Dimensions: {', '.join(ns['dimensions'])}")
+print("🎯 GIẢI PHÁP ĐỀ XUẤT:")
+solutions = [
+    "Sử dụng AWS CLI thay vì JavaScript SDK trong browser",
+    "Tạo API Gateway + Lambda để proxy requests",
+    "Sử dụng AWS Cognito cho authentication",
+    "Fix JSON widget configuration với tất cả required fields",
+    "Handle XML response format từ CloudWatch API"
+]
+
+for i, solution in enumerate(solutions, 1):
+    print(f"{i}. {solution}")
+
+print()
+print("✅ KHUYẾN NGHỊ: Tạo ứng dụng server-side thay vì client-side")

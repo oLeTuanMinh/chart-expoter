@@ -1,537 +1,407 @@
-// AWS CloudWatch Chart Exporter JavaScript
-
 // Application data
-const appData = {
-  "namespaces": [
-    {
-      "value": "AWS/EC2",
-      "label": "AWS/EC2 - Elastic Compute Cloud",
-      "metrics": ["CPUUtilization", "NetworkIn", "NetworkOut", "DiskReadOps", "DiskWriteOps"]
-    },
-    {
-      "value": "AWS/RDS", 
-      "label": "AWS/RDS - Relational Database Service",
-      "metrics": ["CPUUtilization", "DatabaseConnections", "FreeableMemory", "ReadIOPS", "WriteIOPS"]
-    },
-    {
-      "value": "AWS/Lambda",
-      "label": "AWS/Lambda - Lambda Functions", 
-      "metrics": ["Invocations", "Duration", "Errors", "Throttles", "ConcurrentExecutions"]
-    },
-    {
-      "value": "AWS/ApplicationELB",
-      "label": "AWS/ApplicationELB - Application Load Balancer",
-      "metrics": ["RequestCount", "TargetResponseTime", "HTTPCode_Target_2XX_Count", "HTTPCode_Target_4XX_Count"]
-    },
-    {
-      "value": "AWS/S3",
-      "label": "AWS/S3 - Simple Storage Service",
-      "metrics": ["BucketSizeBytes", "NumberOfObjects", "AllRequests", "GetRequests"]
-    }
-  ],
-  "regions": [
-    {"value": "us-east-1", "label": "US East (N. Virginia)"},
-    {"value": "us-west-2", "label": "US West (Oregon)"},
-    {"value": "eu-west-1", "label": "Europe (Ireland)"},
-    {"value": "ap-southeast-1", "label": "Asia Pacific (Singapore)"},
-    {"value": "ap-northeast-1", "label": "Asia Pacific (Tokyo)"}
-  ],
-  "statistics": ["Average", "Sum", "Maximum", "Minimum", "SampleCount"],
-  "templates": [
-    {
-      "name": "EC2 CPU Utilization",
-      "config": {
-        "namespace": "AWS/EC2",
-        "metric": "CPUUtilization", 
-        "dimensions": "InstanceId=i-1234567890abcdef0",
-        "statistic": "Average",
-        "period": 300,
-        "title": "EC2 Instance CPU Utilization"
-      }
-    },
-    {
-      "name": "RDS Database Connections",
-      "config": {
-        "namespace": "AWS/RDS",
-        "metric": "DatabaseConnections",
-        "dimensions": "DBInstanceIdentifier=mydb-instance", 
-        "statistic": "Average",
-        "period": 300,
-        "title": "RDS Database Connections"
-      }
-    },
-    {
-      "name": "Lambda Invocations",
-      "config": {
-        "namespace": "AWS/Lambda",
-        "metric": "Invocations",
-        "dimensions": "FunctionName=my-function",
-        "statistic": "Sum", 
-        "period": 300,
-        "title": "Lambda Function Invocations"
-      }
-    }
-  ]
+const metricsData = {
+    'AWS/EC2': ['CPUUtilization', 'NetworkIn', 'NetworkOut', 'DiskReadOps', 'DiskWriteOps'],
+    'AWS/RDS': ['CPUUtilization', 'DatabaseConnections', 'FreeableMemory', 'ReadIOPS', 'WriteIOPS'],
+    'AWS/Lambda': ['Invocations', 'Duration', 'Errors', 'Throttles', 'ConcurrentExecutions'],
+    'AWS/ELB': ['RequestCount', 'TargetResponseTime', 'HTTPCode_Target_2XX_Count', 'HTTPCode_Target_4XX_Count']
 };
 
-// DOM Elements
-const elements = {
-  // AWS Config
-  accessKeyId: document.getElementById('accessKeyId'),
-  secretAccessKey: document.getElementById('secretAccessKey'),
-  region: document.getElementById('region'),
-  
-  // Metric Config
-  namespace: document.getElementById('namespace'),
-  metricName: document.getElementById('metricName'),
-  dimensions: document.getElementById('dimensions'),
-  statistic: document.getElementById('statistic'),
-  startTime: document.getElementById('startTime'),
-  endTime: document.getElementById('endTime'),
-  period: document.getElementById('period'),
-  periodValue: document.getElementById('periodValue'),
-  chartTitle: document.getElementById('chartTitle'),
-  
-  // Actions
-  generatePreview: document.getElementById('generatePreview'),
-  exportChart: document.getElementById('exportChart'),
-  downloadPng: document.getElementById('downloadPng'),
-  
-  // Display
-  jsonConfig: document.getElementById('jsonConfig'),
-  loadingIndicator: document.getElementById('loadingIndicator'),
-  exportResult: document.getElementById('exportResult'),
-  chartImage: document.getElementById('chartImage'),
-  
-  // Templates
-  templatesGrid: document.getElementById('templatesGrid')
+const dimensionNames = {
+    'AWS/EC2': 'InstanceId',
+    'AWS/RDS': 'DBInstanceIdentifier', 
+    'AWS/Lambda': 'FunctionName',
+    'AWS/ELB': 'LoadBalancer'
 };
 
-// Initialize app
-document.addEventListener('DOMContentLoaded', function() {
-  initializeApp();
-  loadSavedSettings();
-  setupEventListeners();
-});
+const sampleValues = {
+    'AWS/EC2': 'i-0b7c8d02813c56a21',
+    'AWS/RDS': 'mydb-instance',
+    'AWS/Lambda': 'my-function',
+    'AWS/ELB': 'my-load-balancer'
+};
 
-function initializeApp() {
-  populateDropdowns();
-  setupDefaultValues();
-  renderTemplates();
+// Global AWS configuration
+let cloudwatch = null;
+
+// Tab switching functionality
+function showTab(tabName) {
+    // Hide all tabs
+    const tabs = document.querySelectorAll('.tab-content');
+    tabs.forEach(tab => tab.classList.remove('active'));
+    
+    // Remove active class from all buttons
+    const buttons = document.querySelectorAll('.tab-button');
+    buttons.forEach(btn => btn.classList.remove('active'));
+    
+    // Show selected tab
+    document.getElementById(tabName + '-tab').classList.add('active');
+    
+    // Add active class to clicked button
+    event.target.classList.add('active');
+    
+    // Update JSON preview if on browser tab
+    if (tabName === 'browser') {
+        updateJsonPreview();
+    }
 }
 
-function populateDropdowns() {
-  // Populate regions
-  appData.regions.forEach(region => {
-    const option = document.createElement('option');
-    option.value = region.value;
-    option.textContent = region.label;
-    elements.region.appendChild(option);
-  });
-  
-  // Populate namespaces
-  appData.namespaces.forEach(namespace => {
-    const option = document.createElement('option');
-    option.value = namespace.value;
-    option.textContent = namespace.label;
-    elements.namespace.appendChild(option);
-  });
-  
-  // Populate statistics
-  appData.statistics.forEach(stat => {
-    const option = document.createElement('option');
-    option.value = stat;
-    option.textContent = stat;
-    elements.statistic.appendChild(option);
-  });
-}
-
-function setupDefaultValues() {
-  // Set default time range (last 1 hour)
-  const now = new Date();
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-  
-  elements.endTime.value = formatDateTimeLocal(now);
-  elements.startTime.value = formatDateTimeLocal(oneHourAgo);
-  
-  // Set default region
-  elements.region.value = 'us-east-1';
-  
-  // Set default statistic
-  elements.statistic.value = 'Average';
-}
-
-function formatDateTimeLocal(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-function setupEventListeners() {
-  // Namespace change - update metrics
-  elements.namespace.addEventListener('change', function() {
-    updateMetricsDropdown();
-    saveSettings();
-  });
-  
-  // Period slider
-  elements.period.addEventListener('input', function() {
-    elements.periodValue.textContent = this.value;
-    saveSettings();
-  });
-  
-  // Generate preview
-  elements.generatePreview.addEventListener('click', generatePreview);
-  
-  // Export chart
-  elements.exportChart.addEventListener('click', exportChart);
-  
-  // Download PNG
-  elements.downloadPng.addEventListener('click', downloadPng);
-  
-  // Save settings on input changes
-  const formInputs = [
-    elements.accessKeyId, elements.secretAccessKey, elements.region,
-    elements.metricName, elements.dimensions, elements.statistic,
-    elements.startTime, elements.endTime, elements.chartTitle
-  ];
-  
-  formInputs.forEach(input => {
-    input.addEventListener('change', saveSettings);
-    input.addEventListener('input', saveSettings);
-  });
-}
-
-function updateMetricsDropdown() {
-  const selectedNamespace = elements.namespace.value;
-  elements.metricName.innerHTML = '<option value="">Chọn metric...</option>';
-  
-  if (selectedNamespace) {
-    const namespace = appData.namespaces.find(ns => ns.value === selectedNamespace);
-    if (namespace) {
-      namespace.metrics.forEach(metric => {
+// Update metrics dropdown based on namespace selection
+function updateMetrics() {
+    const namespace = document.getElementById('namespace').value;
+    const metricSelect = document.getElementById('metricName');
+    const dimensionNameInput = document.getElementById('dimensionName');
+    const dimensionValueInput = document.getElementById('dimensionValue');
+    
+    // Clear existing options
+    metricSelect.innerHTML = '';
+    
+    // Add new options
+    metricsData[namespace].forEach(metric => {
         const option = document.createElement('option');
         option.value = metric;
         option.textContent = metric;
-        elements.metricName.appendChild(option);
-      });
-    }
-  }
-}
-
-function renderTemplates() {
-  elements.templatesGrid.innerHTML = '';
-  
-  appData.templates.forEach(template => {
-    const templateCard = document.createElement('div');
-    templateCard.className = 'template-card';
-    templateCard.innerHTML = `
-      <h3>${template.name}</h3>
-      <p>Namespace: ${template.config.namespace}</p>
-      <div class="template-details">
-        <span class="template-tag">${template.config.metric}</span>
-        <span class="template-tag">${template.config.statistic}</span>
-        <span class="template-tag">${template.config.period}s</span>
-      </div>
-    `;
-    
-    templateCard.addEventListener('click', () => loadTemplate(template));
-    elements.templatesGrid.appendChild(templateCard);
-  });
-}
-
-function loadTemplate(template) {
-  const config = template.config;
-  
-  // Load template data into form
-  elements.namespace.value = config.namespace;
-  updateMetricsDropdown();
-  
-  setTimeout(() => {
-    elements.metricName.value = config.metric;
-    elements.dimensions.value = config.dimensions;
-    elements.statistic.value = config.statistic;
-    elements.period.value = config.period;
-    elements.periodValue.textContent = config.period;
-    elements.chartTitle.value = config.title;
-    
-    // Generate preview automatically
-    generatePreview();
-    saveSettings();
-  }, 100);
-}
-
-function generatePreview() {
-  if (!validateForm()) {
-    return;
-  }
-  
-  const config = buildWidgetConfig();
-  elements.jsonConfig.value = JSON.stringify(config, null, 2);
-}
-
-function validateForm() {
-  let isValid = true;
-  const requiredFields = [
-    { element: elements.accessKeyId, name: 'AWS Access Key ID' },
-    { element: elements.secretAccessKey, name: 'AWS Secret Access Key' },
-    { element: elements.region, name: 'Region' },
-    { element: elements.namespace, name: 'Namespace' },
-    { element: elements.metricName, name: 'Metric Name' },
-    { element: elements.statistic, name: 'Statistic' },
-    { element: elements.startTime, name: 'Start Time' },
-    { element: elements.endTime, name: 'End Time' }
-  ];
-  
-  // Clear previous errors
-  document.querySelectorAll('.form-control').forEach(el => {
-    el.classList.remove('error');
-  });
-  document.querySelectorAll('.error-message').forEach(el => {
-    el.remove();
-  });
-  
-  requiredFields.forEach(field => {
-    if (!field.element.value.trim()) {
-      field.element.classList.add('error');
-      showFieldError(field.element, `${field.name} là bắt buộc`);
-      isValid = false;
-    }
-  });
-  
-  // Validate time range
-  if (elements.startTime.value && elements.endTime.value) {
-    const startTime = new Date(elements.startTime.value);
-    const endTime = new Date(elements.endTime.value);
-    
-    if (startTime >= endTime) {
-      elements.endTime.classList.add('error');
-      showFieldError(elements.endTime, 'Thời gian kết thúc phải sau thời gian bắt đầu');
-      isValid = false;
-    }
-  }
-  
-  return isValid;
-}
-
-function showFieldError(element, message) {
-  const errorDiv = document.createElement('div');
-  errorDiv.className = 'error-message';
-  errorDiv.textContent = message;
-  element.parentNode.appendChild(errorDiv);
-}
-
-function buildWidgetConfig() {
-  const dimensions = parseDimensions(elements.dimensions.value);
-  
-  return {
-    "MetricWidget": {
-      "metrics": [
-        [
-          elements.namespace.value,
-          elements.metricName.value,
-          ...dimensions
-        ]
-      ],
-      "period": parseInt(elements.period.value),
-      "stat": elements.statistic.value,
-      "region": elements.region.value,
-      "title": elements.chartTitle.value || `${elements.metricName.value} Chart`,
-      "start": elements.startTime.value,
-      "end": elements.endTime.value,
-      "width": 600,
-      "height": 400
-    }
-  };
-}
-
-function parseDimensions(dimensionsStr) {
-  const dimensions = [];
-  if (dimensionsStr.trim()) {
-    const pairs = dimensionsStr.split(',');
-    pairs.forEach(pair => {
-      const [key, value] = pair.split('=').map(s => s.trim());
-      if (key && value) {
-        dimensions.push(key, value);
-      }
+        metricSelect.appendChild(option);
     });
-  }
-  return dimensions;
+    
+    // Update dimension name and sample value
+    dimensionNameInput.value = dimensionNames[namespace] || 'InstanceId';
+    dimensionValueInput.value = sampleValues[namespace] || 'i-0b7c8d02813c56a21';
+    
+    // Update JSON preview
+    updateJsonPreview();
 }
 
-async function exportChart() {
-  if (!validateForm()) {
-    return;
-  }
-  
-  // Show loading
-  elements.loadingIndicator.classList.remove('hidden');
-  elements.exportResult.classList.add('hidden');
-  
-  try {
-    // Simulate API call delay
-    await sleep(2000);
+// Update CLI metrics dropdown
+function updateCliMetrics() {
+    const namespace = document.getElementById('cliNamespace').value;
+    const metricSelect = document.getElementById('cliMetric');
     
-    // In a real implementation, this would call AWS GetMetricWidgetImage API
-    // For demo purposes, we'll use the provided chart image
-    const chartImageUrl = 'https://pplx-res.cloudinary.com/image/upload/v1749178119/pplx_code_interpreter/642676b8_sztosb.jpg';
+    // Clear existing options
+    metricSelect.innerHTML = '';
     
-    // Display the chart
-    elements.chartImage.src = chartImageUrl;
-    elements.chartImage.alt = elements.chartTitle.value || 'Generated CloudWatch Chart';
+    // Add new options
+    metricsData[namespace].forEach(metric => {
+        const option = document.createElement('option');
+        option.value = metric;
+        option.textContent = metric;
+        metricSelect.appendChild(option);
+    });
     
-    // Hide loading and show result
-    elements.loadingIndicator.classList.add('hidden');
-    elements.exportResult.classList.remove('hidden');
-    
-    showSuccessMessage('Biểu đồ đã được tạo thành công!');
-    
-  } catch (error) {
-    elements.loadingIndicator.classList.add('hidden');
-    showErrorMessage('Có lỗi xảy ra khi tạo biểu đồ: ' + error.message);
-  }
+    // Update dimension name and sample value
+    document.getElementById('cliDimName').value = dimensionNames[namespace] || 'InstanceId';
+    document.getElementById('cliDimValue').value = sampleValues[namespace] || 'i-0b7c8d02813c56a21';
 }
 
-function downloadPng() {
-  const chartTitle = elements.chartTitle.value || 'cloudwatch-chart';
-  const filename = `${chartTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${Date.now()}.png`;
-  
-  // Create a canvas to convert the image to PNG
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  const img = elements.chartImage;
-  
-  canvas.width = img.naturalWidth || 600;
-  canvas.height = img.naturalHeight || 400;
-  
-  // Draw image on canvas
-  ctx.drawImage(img, 0, 0);
-  
-  // Convert to blob and download
-  canvas.toBlob(function(blob) {
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+// Generate widget JSON configuration with proper format
+function generateWidgetConfig() {
+    const namespace = document.getElementById('namespace').value;
+    const metricName = document.getElementById('metricName').value;
+    const dimensionName = document.getElementById('dimensionName').value;
+    const dimensionValue = document.getElementById('dimensionValue').value;
     
-    showSuccessMessage(`File ${filename} đã được tải xuống!`);
-  }, 'image/png');
+    return {
+        view: "timeSeries",  // Required field that was missing!
+        stacked: false,
+        metrics: [[namespace, metricName, dimensionName, dimensionValue]],
+        width: 600,
+        height: 400,
+        start: "-PT3H",
+        end: "PT0H",
+        period: 300,
+        stat: "Average",
+        region: document.getElementById('region').value
+    };
 }
 
-function saveSettings() {
-  const settings = {
-    accessKeyId: elements.accessKeyId.value,
-    region: elements.region.value,
-    namespace: elements.namespace.value,
-    metricName: elements.metricName.value,
-    dimensions: elements.dimensions.value,
-    statistic: elements.statistic.value,
-    period: elements.period.value,
-    chartTitle: elements.chartTitle.value
-  };
-  
-  try {
-    localStorage.setItem('cloudwatch-exporter-settings', JSON.stringify(settings));
-  } catch (e) {
-    // LocalStorage not available in sandbox, ignore silently
-  }
-}
-
-function loadSavedSettings() {
-  try {
-    const savedSettings = localStorage.getItem('cloudwatch-exporter-settings');
-    if (savedSettings) {
-      const settings = JSON.parse(savedSettings);
-      
-      elements.accessKeyId.value = settings.accessKeyId || '';
-      elements.region.value = settings.region || 'us-east-1';
-      elements.namespace.value = settings.namespace || '';
-      elements.metricName.value = settings.metricName || '';
-      elements.dimensions.value = settings.dimensions || '';
-      elements.statistic.value = settings.statistic || 'Average';
-      elements.period.value = settings.period || 300;
-      elements.periodValue.textContent = settings.period || 300;
-      elements.chartTitle.value = settings.chartTitle || '';
-      
-      // Update metrics dropdown if namespace is selected
-      if (settings.namespace) {
-        updateMetricsDropdown();
-        setTimeout(() => {
-          elements.metricName.value = settings.metricName || '';
-        }, 100);
-      }
+// Update JSON preview
+function updateJsonPreview() {
+    const config = generateWidgetConfig();
+    const jsonPreview = document.getElementById('jsonPreview');
+    
+    if (jsonPreview) {
+        jsonPreview.textContent = JSON.stringify(config, null, 2);
+        highlightJson(jsonPreview);
     }
-  } catch (e) {
-    // LocalStorage not available in sandbox, ignore silently
-  }
 }
 
-function showSuccessMessage(message) {
-  const alertDiv = document.createElement('div');
-  alertDiv.className = 'alert alert-success';
-  alertDiv.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: #d4edda;
-    color: #155724;
-    padding: 12px 16px;
-    border: 1px solid #c3e6cb;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    z-index: 1000;
-    max-width: 300px;
-  `;
-  alertDiv.textContent = message;
-  
-  document.body.appendChild(alertDiv);
-  
-  setTimeout(() => {
-    alertDiv.remove();
-  }, 4000);
+// Simple JSON syntax highlighting
+function highlightJson(element) {
+    let html = element.textContent;
+    
+    // Highlight strings
+    html = html.replace(/"([^"]+)":/g, '<span class="key">"$1"</span>:');
+    html = html.replace(/:\s*"([^"]+)"/g, ': <span class="string">"$1"</span>');
+    
+    // Highlight numbers
+    html = html.replace(/:\s*(\d+)/g, ': <span class="number">$1</span>');
+    
+    // Highlight booleans
+    html = html.replace(/:\s*(true|false)/g, ': <span class="boolean">$1</span>');
+    
+    element.innerHTML = html;
 }
 
-function showErrorMessage(message) {
-  const alertDiv = document.createElement('div');
-  alertDiv.className = 'alert alert-error';
-  alertDiv.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: #f8d7da;
-    color: #721c24;
-    padding: 12px 16px;
-    border: 1px solid #f5c6cb;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    z-index: 1000;
-    max-width: 300px;
-  `;
-  alertDiv.textContent = message;
-  
-  document.body.appendChild(alertDiv);
-  
-  setTimeout(() => {
-    alertDiv.remove();
-  }, 5000);
+// Export chart using browser SDK
+async function exportChart() {
+    const button = document.getElementById('exportBtn');
+    const result = document.getElementById('result');
+    
+    // Get credentials
+    const accessKey = document.getElementById('accessKey').value;
+    const secretKey = document.getElementById('secretKey').value;
+    const region = document.getElementById('region').value;
+    
+    if (!accessKey || !secretKey) {
+        showResult('error', 'Vui lòng nhập AWS credentials.');
+        return;
+    }
+    
+    // Show loading state
+    button.classList.add('loading');
+    button.disabled = true;
+    
+    try {
+        // Configure AWS SDK
+        AWS.config.update({
+            accessKeyId: accessKey,
+            secretAccessKey: secretKey,
+            region: region
+        });
+        
+        cloudwatch = new AWS.CloudWatch();
+        
+        // Generate widget configuration
+        const widgetConfig = generateWidgetConfig();
+        
+        const params = {
+            MetricWidget: JSON.stringify(widgetConfig),
+            OutputFormat: 'png'
+        };
+        
+        // Make API call
+        const response = await cloudwatch.getMetricWidgetImage(params).promise();
+        
+        // Convert response to image
+        const imageBlob = new Blob([response.MetricWidgetImage], { type: 'image/png' });
+        const imageUrl = URL.createObjectURL(imageBlob);
+        
+        showResult('success', 'Biểu đồ đã được tạo thành công!', imageUrl);
+        
+    } catch (error) {
+        console.error('Export error:', error);
+        
+        let errorMessage = 'Có lỗi xảy ra khi xuất biểu đồ.';
+        
+        if (error.code === 'NetworkingError' || error.message.includes('CORS')) {
+            errorMessage = `
+                <strong>Lỗi CORS:</strong> Trình duyệt chặn request do CORS policy.<br>
+                <strong>Giải pháp:</strong> Sử dụng tab "AWS CLI Generator" để tạo lệnh CLI thay thế.
+            `;
+        } else if (error.code === 'UnauthorizedOperation' || error.code === 'InvalidUserID.NotFound') {
+            errorMessage = `
+                <strong>Lỗi xác thực:</strong> AWS credentials không hợp lệ hoặc thiếu quyền.<br>
+                <strong>Giải pháp:</strong> Kiểm tra Access Key/Secret Key và đảm bảo IAM user có quyền cloudwatch:GetMetricWidgetImage.
+            `;
+        } else if (error.code === 'ValidationException') {
+            errorMessage = `
+                <strong>Lỗi validation:</strong> JSON widget configuration không hợp lệ.<br>
+                <strong>Giải pháp:</strong> Kiểm tra format JSON trong phần preview.
+            `;
+        }
+        
+        showResult('error', errorMessage);
+    } finally {
+        button.classList.remove('loading');
+        button.disabled = false;
+    }
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+// Show result message
+function showResult(type, message, imageUrl = null) {
+    const result = document.getElementById('result');
+    result.className = `result-section ${type}`;
+    
+    let html = `<p>${message}</p>`;
+    
+    if (imageUrl) {
+        html += `
+            <img src="${imageUrl}" alt="CloudWatch Chart" class="result-image">
+            <p><a href="${imageUrl}" download="cloudwatch-chart.png" class="btn btn--secondary">Tải xuống hình ảnh</a></p>
+        `;
+    }
+    
+    result.innerHTML = html;
+    result.classList.remove('hidden');
 }
 
-// Handle form submission
-document.getElementById('configForm').addEventListener('submit', function(e) {
-  e.preventDefault();
+// Generate CLI command
+function updateCliCommand() {
+    const region = document.getElementById('cliRegion').value;
+    const namespace = document.getElementById('cliNamespace').value;
+    const metric = document.getElementById('cliMetric').value;
+    const dimName = document.getElementById('cliDimName').value;
+    const dimValue = document.getElementById('cliDimValue').value;
+    const timePeriod = document.getElementById('cliTimePeriod').value;
+    
+    const widgetConfig = {
+        view: "timeSeries",
+        stacked: false,
+        metrics: [[namespace, metric, dimName, dimValue]],
+        width: 600,
+        height: 400,
+        start: timePeriod,
+        end: "PT0H",
+        period: 300,
+        stat: "Average"
+    };
+    
+    const command = `aws cloudwatch get-metric-widget-image --region ${region} \\
+    --metric-widget '${JSON.stringify(widgetConfig)}' \\
+    --output-format png \\
+    --output text | base64 --decode > chart.png`;
+    
+    document.getElementById('cliCommand').textContent = command;
+}
+
+// Copy CLI command to clipboard
+async function copyCliCommand() {
+    const command = document.getElementById('cliCommand').textContent;
+    
+    try {
+        await navigator.clipboard.writeText(command);
+        
+        // Show temporary success message
+        const button = event.target;
+        const originalText = button.textContent;
+        button.textContent = 'Đã sao chép!';
+        button.classList.add('btn--success');
+        
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.classList.remove('btn--success');
+        }, 2000);
+        
+    } catch (err) {
+        console.error('Failed to copy text: ', err);
+        
+        // Fallback: select text
+        const range = document.createRange();
+        range.selectNode(document.getElementById('cliCommand'));
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        
+        alert('Không thể tự động sao chép. Vui lòng sử dụng Ctrl+C để sao chép text đã chọn.');
+    }
+}
+
+// Initialize application
+document.addEventListener('DOMContentLoaded', function() {
+    // Set up initial state
+    updateMetrics();
+    updateCliMetrics();
+    updateJsonPreview();
+    updateCliCommand();
+    
+    // Add event listeners for JSON preview updates
+    const inputs = ['namespace', 'metricName', 'dimensionName', 'dimensionValue', 'region'];
+    inputs.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('change', updateJsonPreview);
+            element.addEventListener('input', updateJsonPreview);
+        }
+    });
+    
+    // Add event listeners for CLI command updates
+    const cliInputs = ['cliRegion', 'cliNamespace', 'cliMetric', 'cliDimName', 'cliDimValue', 'cliTimePeriod'];
+    cliInputs.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('change', updateCliCommand);
+            element.addEventListener('input', updateCliCommand);
+        }
+    });
+    
+    // Show browser limitations warning
+    console.log('AWS CloudWatch Chart Exporter - Fixed Version');
+    console.log('Common issues fixed:');
+    console.log('1. Added required "view": "timeSeries" field to JSON widget');
+    console.log('2. Better CORS error handling');
+    console.log('3. Proper response format handling');
+    console.log('4. AWS CLI alternative provided');
 });
 
-document.getElementById('metricForm').addEventListener('submit', function(e) {
-  e.preventDefault();
+// Utility function to validate AWS credentials format
+function validateCredentials(accessKey, secretKey) {
+    const accessKeyPattern = /^AKIA[0-9A-Z]{16}$/;
+    const secretKeyPattern = /^[A-Za-z0-9/+=]{40}$/;
+    
+    return {
+        validAccessKey: accessKeyPattern.test(accessKey),
+        validSecretKey: secretKeyPattern.test(secretKey)
+    };
+}
+
+// Add credentials validation on input
+document.addEventListener('DOMContentLoaded', function() {
+    const accessKeyInput = document.getElementById('accessKey');
+    const secretKeyInput = document.getElementById('secretKey');
+    
+    if (accessKeyInput) {
+        accessKeyInput.addEventListener('blur', function() {
+            const validation = validateCredentials(this.value, '');
+            if (this.value && !validation.validAccessKey) {
+                this.style.borderColor = 'var(--color-error)';
+                this.title = 'Access Key format không hợp lệ. Phải bắt đầu với AKIA và có 20 ký tự.';
+            } else {
+                this.style.borderColor = '';
+                this.title = '';
+            }
+        });
+    }
+    
+    if (secretKeyInput) {
+        secretKeyInput.addEventListener('blur', function() {
+            const validation = validateCredentials('', this.value);
+            if (this.value && !validation.validSecretKey) {
+                this.style.borderColor = 'var(--color-error)';
+                this.title = 'Secret Key format không hợp lệ. Phải có 40 ký tự.';
+            } else {
+                this.style.borderColor = '';
+                this.title = '';
+            }
+        });
+    }
+});
+
+// Global error handler for unhandled promises
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('Unhandled promise rejection:', event.reason);
+    
+    if (event.reason && event.reason.code === 'NetworkingError') {
+        showResult('error', `
+            <strong>Lỗi mạng:</strong> Không thể kết nối đến AWS API.<br>
+            <strong>Có thể do:</strong> CORS policy, firewall, hoặc AWS service unavailable.<br>
+            <strong>Giải pháp:</strong> Sử dụng AWS CLI hoặc server-side implementation.
+        `);
+    }
+});
+
+// Add keyboard shortcuts
+document.addEventListener('keydown', function(event) {
+    // Ctrl/Cmd + Enter to export chart
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        if (document.querySelector('#browser-tab.active')) {
+            exportChart();
+        }
+    }
+    
+    // Ctrl/Cmd + C when CLI command is focused
+    if ((event.ctrlKey || event.metaKey) && event.key === 'c') {
+        const activeElement = document.activeElement;
+        if (activeElement && activeElement.id === 'cliCommand') {
+            copyCliCommand();
+            event.preventDefault();
+        }
+    }
 });

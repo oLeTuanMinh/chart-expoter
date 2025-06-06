@@ -1,5 +1,4 @@
-# Tạo script Python để export CloudWatch charts
-python_script = '''#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 AWS CloudWatch Chart Exporter
 Script Python đơn giản để export biểu đồ CloudWatch thành file PNG
@@ -21,7 +20,7 @@ class CloudWatchExporter:
     def __init__(self, region='ap-southeast-1'):
         self.region = region
         self.cloudwatch = boto3.client('cloudwatch', region_name=region)
-    
+
     def create_widget_config(self, namespace, metric_name, dimension_name, dimension_value, 
                            start_time="-PT3H", end_time="PT0H", period=300, stat="Average"):
         """Tạo widget configuration với tất cả trường bắt buộc"""
@@ -38,40 +37,40 @@ class CloudWatchExporter:
             "region": self.region,
             "title": f"{metric_name} - {dimension_value}"
         }
-    
+
     def export_chart(self, widget_config, output_file=None):
         """Export biểu đồ từ CloudWatch"""
         try:
             # Ensure required fields
             if 'view' not in widget_config:
                 widget_config['view'] = 'timeSeries'
-            
+
             print(f"📊 Exporting chart với config:")
             print(json.dumps(widget_config, indent=2))
-            
+
             # Call CloudWatch API
             response = self.cloudwatch.get_metric_widget_image(
                 MetricWidget=json.dumps(widget_config),
                 OutputFormat='png'
             )
-            
+
             # Save to file
             if not output_file:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_file = f"cloudwatch_chart_{timestamp}.png"
-            
+
             with open(output_file, 'wb') as f:
                 f.write(response['MetricWidgetImage'])
-            
+
             print(f"✅ Chart đã được xuất ra: {output_file}")
             print(f"📁 File size: {len(response['MetricWidgetImage'])} bytes")
-            
+
             return output_file
-            
+
         except Exception as e:
             print(f"❌ Lỗi khi export chart: {str(e)}")
             return None
-    
+
     def export_ec2_cpu(self, instance_id, output_file=None):
         """Export CPU utilization chart cho EC2 instance"""
         config = self.create_widget_config(
@@ -81,7 +80,7 @@ class CloudWatchExporter:
             dimension_value=instance_id
         )
         return self.export_chart(config, output_file)
-    
+
     def export_rds_connections(self, db_instance_id, output_file=None):
         """Export database connections chart cho RDS"""
         config = self.create_widget_config(
@@ -91,7 +90,7 @@ class CloudWatchExporter:
             dimension_value=db_instance_id
         )
         return self.export_chart(config, output_file)
-    
+
     def export_lambda_invocations(self, function_name, output_file=None):
         """Export invocations chart cho Lambda function"""
         config = self.create_widget_config(
@@ -120,9 +119,9 @@ def main():
     parser.add_argument('--db-instance', help='RDS DB Instance ID cho connections chart')
     parser.add_argument('--lambda-function', help='Lambda Function Name cho invocations chart')
     parser.add_argument('--output', help='Output file name')
-    
+
     args = parser.parse_args()
-    
+
     # Check AWS credentials
     try:
         boto3.Session().get_credentials()
@@ -130,9 +129,9 @@ def main():
         print("❌ AWS credentials không được cấu hình đúng cách.")
         print("Vui lòng chạy: aws configure")
         sys.exit(1)
-    
+
     exporter = CloudWatchExporter(region=args.region)
-    
+
     if args.config:
         # Load từ config file
         config = load_config_from_file(args.config)
@@ -153,62 +152,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-'''
-
-# Save script to file
-with open('cloudwatch_exporter.py', 'w', encoding='utf-8') as f:
-    f.write(python_script)
-
-print("✅ Đã tạo file: cloudwatch_exporter.py")
-print()
-
-# Tạo example config files
-example_configs = {
-    'ec2_cpu_config.json': {
-        "view": "timeSeries",
-        "stacked": False,
-        "metrics": [["AWS/EC2", "CPUUtilization", "InstanceId", "i-0b7c8d02813c56a21"]],
-        "width": 600,
-        "height": 400,
-        "start": "-PT3H",
-        "end": "PT0H",
-        "period": 300,
-        "stat": "Average",
-        "title": "EC2 CPU Utilization - Last 3 Hours"
-    },
-    'rds_multi_metrics_config.json': {
-        "view": "timeSeries",
-        "stacked": False,
-        "metrics": [
-            ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "mydb-instance"],
-            [".", "DatabaseConnections", ".", "."],
-            [".", "FreeableMemory", ".", "."]
-        ],
-        "width": 800,
-        "height": 400,
-        "start": "-PT6H",
-        "end": "PT0H",
-        "period": 300,
-        "stat": "Average",
-        "title": "RDS Multi-Metrics Dashboard"
-    }
-}
-
-for filename, config in example_configs.items():
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=2)
-    print(f"✅ Đã tạo example config: {filename}")
-
-print()
-print("🎯 CÁCH SỬ DỤNG SCRIPT PYTHON:")
-print("1. Cài đặt boto3: pip install boto3")
-print("2. Cấu hình AWS: aws configure")
-print("3. Chạy script:")
-print("   python cloudwatch_exporter.py --instance-id i-0b7c8d02813c56a21")
-print("   python cloudwatch_exporter.py --config ec2_cpu_config.json")
-print()
-print("📝 Script này đã fix tất cả các vấn đề:")
-print("   ✅ Có trường 'view': 'timeSeries' bắt buộc")
-print("   ✅ Proper error handling") 
-print("   ✅ Flexible configuration")
-print("   ✅ Multiple metric types support")
