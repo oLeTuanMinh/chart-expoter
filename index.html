@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Công cụ Tạo Script Export Chart CloudWatch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .form-checkbox:checked {
+            background-color: #4f46e5;
+            border-color: #4f46e5;
+        }
+        .code-block {
+            background-color: #1f2937;
+            color: #d1d5db;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .tab-btn {
+            transition: all 0.3s ease;
+        }
+        .tab-btn.active {
+            border-color: #4f46e5;
+            background-color: #4f46e5;
+            color: white;
+        }
+        .metric-list {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .metric-list.expanded {
+             max-height: 500px; /* Adjust as needed */
+        }
+        .expand-icon {
+            transition: transform 0.3s ease;
+        }
+        .expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <div class="max-w-5xl mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
+            <div class="p-6 md:p-8">
+                <div class="flex items-center mb-6">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-indigo-500 mr-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 9 5.293 6.707a1 1 0 010-1.414zM11 9a1 1 0 100-2h3a1 1 0 100 2h-3z" clip-rule="evenodd" />
+                    </svg>
+                    <div>
+                        <h1 class="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Tạo Script Export Biểu đồ CloudWatch</h1>
+                        <p class="text-gray-500 dark:text-gray-400 mt-1">Chọn dịch vụ, chỉ số (metric), nhập ID và nhận script tự động.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- LEFT COLUMN: INPUTS -->
+                    <div class="space-y-6">
+                        <div>
+                           <h2 class="text-xl font-semibold mb-3 text-gray-900 dark:text-white">1. Cấu hình chung</h2>
+                           <label for="aws-region" class="block text-sm font-medium text-gray-700 dark:text-gray-300">AWS Region</label>
+                           <select id="aws-region" class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2.5">
+                                <option>us-east-1</option>
+                                <option>us-east-2</option>
+                                <option>us-west-1</option>
+                                <option>us-west-2</option>
+                                <option>ap-southeast-1</option>
+                                <option>ap-southeast-2</option>
+                                <option>ap-northeast-1</option>
+                                <option>eu-central-1</option>
+                           </select>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-semibold mb-3 text-gray-900 dark:text-white">2. Chọn Dịch vụ và Chỉ số</h2>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Nhập ID tài nguyên (cách nhau bởi dấu phẩy) và chọn các chỉ số cần xuất.</p>
+                            
+                            <!-- Service Toggles -->
+                            <div class="space-y-4" id="services-container">
+                                <!-- Service blocks will be dynamically generated here -->
+                            </div>
+                        </div>
+
+                        <div class="text-center pt-4">
+                            <button id="generate-btn" class="w-full inline-flex justify-center items-center px-8 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+                                Tạo Script
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT COLUMN: OUTPUT -->
+                    <div id="output-section" class="hidden">
+                        <h2 class="text-xl font-semibold mb-3 text-gray-900 dark:text-white">3. Chọn Loại Script & Xem Kết quả</h2>
+                        
+                        <div class="mb-4 border-b border-gray-200 dark:border-gray-700">
+                            <nav class="-mb-px flex space-x-4" aria-label="Tabs">
+                                <button id="tab-python" data-type="python" class="tab-btn active w-1/2 whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm">Python (Boto3)</button>
+                                <button id="tab-cli" data-type="cli" class="tab-btn w-1/2 whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300">AWS CLI (Shell)</button>
+                            </nav>
+                        </div>
+                        
+                        <p id="output-description" class="text-sm text-gray-500 dark:text-gray-400 mb-4"></p>
+                        <div class="relative">
+                            <textarea id="script-output" readonly class="code-block w-full h-96 text-sm"></textarea>
+                            <button id="copy-btn" class="absolute top-2 right-2 bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded text-xs">Sao chép</button>
+                        </div>
+                        
+                        <div id="instructions-python" class="mt-4 bg-blue-100 dark:bg-blue-900 border-l-4 border-blue-500 text-blue-700 dark:text-blue-200 p-4 rounded-md">
+                            <p class="font-bold">Hướng dẫn (Python)</p>
+                            <ol class="list-decimal list-inside mt-2 text-sm">
+                                <li>Cài đặt Boto3: `pip install boto3`</li>
+                                <li>Cấu hình AWS credentials: `aws configure`</li>
+                                <li>Lưu script thành `export_charts.py`, tạo thư mục `charts` và chạy: `python export_charts.py`</li>
+                            </ol>
+                        </div>
+                        <div id="instructions-cli" class="hidden mt-4 bg-green-100 dark:bg-green-900 border-l-4 border-green-500 text-green-700 dark:text-green-200 p-4 rounded-md">
+                            <p class="font-bold">Hướng dẫn (AWS CLI)</p>
+                             <ol class="list-decimal list-inside mt-2 text-sm">
+                                <li>Yêu cầu: `aws-cli` và `jq` đã được cài đặt.</li>
+                                <li>Cấu hình AWS credentials: `aws configure`</li>
+                                <li>Lưu script thành `export_charts.sh`, cấp quyền (`chmod +x export_charts.sh`) và chạy: `./export_charts.sh`</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- DATA DEFINITIONS ---
+        const SERVICES = {
+            ec2: { title: "EC2 Instances", placeholder: "i-123abc, i-456def" },
+            alb: { title: "Application Load Balancers", placeholder: "app/my-lb/123, app/another-lb/456" },
+            rds: { title: "RDS Databases", placeholder: "db-instance-1, db-instance-2" },
+            lambda: { title: "Lambda Functions", placeholder: "my-function-1, my-function-2" }
+        };
+
+        // **FIXED**: Added "period" and "start" to all definitions to ensure charts have a time range and data.
+        const WIDGET_DEFS = {
+            ec2: [
+                { name: 'CPUUtilization', def: { "view": "timeSeries", "stacked": false, "title": "EC2 CPU Utilization", "metrics": [["AWS/EC2", "CPUUtilization", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
+                { name: 'NetworkIn', def: { "view": "timeSeries", "stacked": false, "title": "EC2 Network In", "metrics": [["AWS/EC2", "NetworkIn", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
+                { name: 'NetworkOut', def: { "view": "timeSeries", "stacked": false, "title": "EC2 Network Out", "metrics": [["AWS/EC2", "NetworkOut", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
+                { name: 'DiskReadBytes', def: { "view": "timeSeries", "stacked": false, "title": "EC2 Disk Read", "metrics": [["AWS/EC2", "DiskReadBytes", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
+                { name: 'DiskWriteBytes', def: { "view": "timeSeries", "stacked": false, "title": "EC2 Disk Write", "metrics": [["AWS/EC2", "DiskWriteBytes", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
+            ],
+            alb: [
+                { name: 'HealthyHostCount', def: { "view": "timeSeries", "stacked": false, "title": "ALB Healthy Hosts", "metrics": [["AWS/ApplicationELB", "HealthyHostCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
+                { name: 'UnHealthyHostCount', def: { "view": "timeSeries", "stacked": false, "title": "ALB UnHealthy Hosts", "metrics": [["AWS/ApplicationELB", "UnHealthyHostCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
+                { name: 'RequestCount', def: { "view": "timeSeries", "stacked": false, "title": "ALB Request Count", "metrics": [["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
+                { name: 'HTTPCode_Target_5XX_Count', def: { "view": "timeSeries", "stacked": false, "title": "ALB 5XX Errors", "metrics": [["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
+                { name: 'TargetConnectionErrorCount', def: { "view": "timeSeries", "stacked": false, "title": "ALB Target Connection Errors", "metrics": [["AWS/ApplicationELB", "TargetConnectionErrorCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
+            ],
+            rds: [
+                { name: 'CPUUtilization', def: { "view": "timeSeries", "stacked": false, "title": "RDS CPU Utilization", "metrics": [["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
+                { name: 'DatabaseConnections', def: { "view": "timeSeries", "stacked": false, "title": "RDS Connections", "metrics": [["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
+                { name: 'FreeableMemory', def: { "view": "timeSeries", "stacked": false, "title": "RDS Freeable Memory", "metrics": [["AWS/RDS", "FreeableMemory", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
+                { name: 'ReadIOPS', def: { "view": "timeSeries", "stacked": false, "title": "RDS Read IOPS", "metrics": [["AWS/RDS", "ReadIOPS", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
+                { name: 'WriteIOPS', def: { "view": "timeSeries", "stacked": false, "title": "RDS Write IOPS", "metrics": [["AWS/RDS", "WriteIOPS", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } }
+            ],
+            lambda: [
+                { name: 'Invocations', def: { "view": "timeSeries", "stacked": false, "title": "Lambda Invocations", "metrics": [["AWS/Lambda", "Invocations", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
+                { name: 'Errors', def: { "view": "timeSeries", "stacked": false, "title": "Lambda Errors", "metrics": [["AWS/Lambda", "Errors", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
+                { name: 'Duration', def: { "view": "timeSeries", "stacked": false, "title": "Lambda Duration", "metrics": [["AWS/Lambda", "Duration", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
+                { name: 'Throttles', def: { "view": "timeSeries", "stacked": false, "title": "Lambda Throttles", "metrics": [["AWS/Lambda", "Throttles", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
+            ]
+        };
+
+        // --- DOM Elements ---
+        const generateBtn = document.getElementById('generate-btn');
+        const copyBtn = document.getElementById('copy-btn');
+        const tabPython = document.getElementById('tab-python');
+        const tabCli = document.getElementById('tab-cli');
+        const servicesContainer = document.getElementById('services-container');
+
+        // --- State ---
+        let currentScriptType = 'python';
+        let generatedScripts = { python: '', cli: '' };
+
+        // --- Initializer ---
+        document.addEventListener('DOMContentLoaded', () => {
+            buildServicesUI();
+            setupEventListeners();
+        });
+
+        // --- UI Builder ---
+        function buildServicesUI() {
+            for (const [key, service] of Object.entries(SERVICES)) {
+                const metrics = WIDGET_DEFS[key];
+                const metricsHtml = metrics.map(metric => `
+                    <div class="py-1">
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="check-${key}-${metric.name}" data-service="${key}" class="form-checkbox h-4 w-4 text-indigo-600 rounded metric-check">
+                            <span class="ml-2 text-sm text-gray-600 dark:text-gray-300">${metric.name}</span>
+                        </label>
+                    </div>
+                `).join('');
+
+                const serviceHtml = `
+                    <div class="p-4 border dark:border-gray-700 rounded-lg">
+                        <div class="flex items-center justify-between cursor-pointer" data-toggle-metrics="${key}">
+                            <label class="inline-flex items-center font-semibold text-lg text-gray-800 dark:text-gray-200">
+                                <input type="checkbox" id="check-${key}" class="form-checkbox h-5 w-5 text-indigo-600 rounded service-master-check mr-3">
+                                ${service.title}
+                            </label>
+                            <svg class="w-5 h-5 text-gray-500 expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </div>
+                        <textarea id="ids-${key}" class="mt-2 block w-full bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm font-mono text-sm p-2" rows="2" placeholder="${service.placeholder}"></textarea>
+                        <div id="metrics-${key}" class="metric-list mt-3 pl-4 border-l-2 border-gray-200 dark:border-gray-600 space-y-1">
+                            ${metricsHtml}
+                        </div>
+                    </div>`;
+                servicesContainer.innerHTML += serviceHtml;
+            }
+        }
+        
+        // --- Event Listeners ---
+        function setupEventListeners() {
+            generateBtn.addEventListener('click', () => {
+                generateAllScripts();
+                renderScript();
+            });
+            copyBtn.addEventListener('click', copyScriptToClipboard);
+            tabPython.addEventListener('click', () => switchTab('python'));
+            tabCli.addEventListener('click', () => switchTab('cli'));
+
+            servicesContainer.addEventListener('click', (e) => {
+                const target = e.target;
+                const toggler = target.closest('[data-toggle-metrics]');
+                if (toggler) {
+                    const serviceKey = toggler.dataset.toggleMetrics;
+                    const metricList = document.getElementById(`metrics-${serviceKey}`);
+                    metricList.classList.toggle('expanded');
+                    toggler.classList.toggle('expanded');
+                }
+                
+                if (target.classList.contains('service-master-check')) {
+                    const serviceKey = target.id.split('-')[1];
+                    const metrics = document.querySelectorAll(`.metric-check[data-service="${serviceKey}"]`);
+                    metrics.forEach(metric => metric.checked = target.checked);
+                }
+                
+                if (target.classList.contains('metric-check')) {
+                     const serviceKey = target.dataset.service;
+                     const masterCheck = document.getElementById(`check-${serviceKey}`);
+                     const metrics = document.querySelectorAll(`.metric-check[data-service="${serviceKey}"]`);
+                     const allChecked = Array.from(metrics).every(m => m.checked);
+                     const someChecked = Array.from(metrics).some(m => m.checked);
+                     masterCheck.checked = allChecked;
+                     masterCheck.indeterminate = !allChecked && someChecked;
+                }
+            });
+        }
+        
+        // --- Script Generation ---
+        function generateAllScripts() {
+            const region = document.getElementById('aws-region').value;
+            let pythonCalls = [];
+            let cliCalls = [];
+
+            for (const [serviceKey, serviceData] of Object.entries(SERVICES)) {
+                const ids = document.getElementById(`ids-${serviceKey}`).value.split(',').map(id => id.trim()).filter(id => id);
+                if (ids.length === 0) continue;
+
+                for (const widget of WIDGET_DEFS[serviceKey]) {
+                    const metricCheckbox = document.getElementById(`check-${serviceKey}-${widget.name}`);
+                    if (!metricCheckbox || !metricCheckbox.checked) continue;
+
+                    for (const id of ids) {
+                        let widgetDef = JSON.parse(JSON.stringify(widget.def));
+                        widgetDef.metrics[0][3] = id;
+                        widgetDef.title = `${id} - ${widget.name}`;
+                        widgetDef.region = region;
+                        
+                        const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_');
+                        const filename = `${serviceKey}_${safeId}_${widget.name}.png`;
+                        
+                        const pythonSafeId = safeId.replace(/-/g, '_');
+                        pythonCalls.push(`
+    # --- Chart for ${id} (${widget.name}) ---
+    print(f"Generating chart for ${id}: ${widget.name}...")
+    widget_json_${pythonSafeId}_${widget.name} = ${JSON.stringify(widgetDef, null, 4)}
+    get_metric_image(widget_json_${pythonSafeId}_${widget.name}, "${filename}")`);
+                        
+                        const cliWidgetJson = JSON.stringify(widgetDef);
+                        cliCalls.push(`
+# --- Chart for ${id} (${widget.name}) ---
+echo "Generating chart for ${id}: ${widget.name}..."
+METRIC_WIDGET_JSON='${cliWidgetJson}'
+aws cloudwatch get-metric-widget-image --region $AWS_REGION --metric-widget "$METRIC_WIDGET_JSON" --output json | jq -r .MetricWidgetImage | base64 --decode > "$OUTPUT_DIR/${filename}"
+if [ $? -eq 0 ]; then echo "  Success: ${filename}"; else echo "  [ERROR] Failed to create ${filename}"; fi`);
+                    }
+                }
+            }
+
+            generatedScripts.python = getPythonScriptTemplate(region, pythonCalls.join(''));
+            generatedScripts.cli = getAwsCliScriptTemplate(region, cliCalls.join(''));
+            
+            document.getElementById('output-section').classList.remove('hidden');
+        }
+
+        // --- Core Functions ---
+        function switchTab(type) {
+            currentScriptType = type;
+            tabPython.classList.toggle('active', type === 'python');
+            tabCli.classList.toggle('active', type === 'cli');
+            document.getElementById('instructions-python').classList.toggle('hidden', type !== 'python');
+            document.getElementById('instructions-cli').classList.toggle('hidden', type !== 'cli');
+            renderScript();
+        }
+
+        function renderScript() {
+            document.getElementById('script-output').value = generatedScripts[currentScriptType];
+            const desc = currentScriptType === 'python' ? 'Lưu nội dung này vào file (ví dụ: export_charts.py)' : 'Lưu nội dung này vào file (ví dụ: export_charts.sh)';
+            document.getElementById('output-description').textContent = desc + ' và chạy nó trên máy của bạn.';
+        }
+        
+        function copyScriptToClipboard() {
+            navigator.clipboard.writeText(document.getElementById('script-output').value)
+                .then(() => {
+                    copyBtn.textContent = 'Đã sao chép!';
+                    setTimeout(() => { copyBtn.textContent = 'Sao chép'; }, 2000);
+                });
+        }
+        
+        // --- Template Generators ---
+        function getPythonScriptTemplate(region, calls) {
+            if (!calls.trim()) return "# Không có chỉ số nào được chọn. Vui lòng chọn ít nhất một chỉ số để tạo script.";
+            return `import boto3
+import json
+import os
+import sys
+# --- CONFIGURATION ---
+AWS_REGION = "${region}"
+OUTPUT_DIR = "charts"
+# --- MAIN SCRIPT ---
+def get_metric_image(widget_definition, filename):
+    """Calls AWS CloudWatch to get a metric widget image and saves it to a file."""
+    try:
+        widget_string = json.dumps(widget_definition)
+        response = cloudwatch_client.get_metric_widget_image(MetricWidget=widget_string)
+        image_data = response['MetricWidgetImage']
+        filepath = os.path.join(OUTPUT_DIR, filename)
+        with open(filepath, 'wb') as f:
+            f.write(image_data)
+        print(f"  Successfully saved chart to {filepath}")
+    except Exception as e:
+        print(f"  [ERROR] Could not generate chart for {filename}. Reason: {e}", file=sys.stderr)
+if __name__ == "__main__":
+    print("--- Starting CloudWatch Chart Export (Python) ---")
+    if not os.path.exists(OUTPUT_DIR):
+        print(f"Creating output directory: {OUTPUT_DIR}")
+        os.makedirs(OUTPUT_DIR)
+    try:
+        session = boto3.Session(region_name=AWS_REGION)
+        cloudwatch_client = session.client('cloudwatch')
+        cloudwatch_client.list_metrics(MaxItems=1)
+    except Exception as e:
+        print(f"[FATAL] Could not connect to AWS. Check credentials and region. Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    # --- GENERATED CALLS ---
+${calls}
+    # -----------------------
+    print("--- Script finished ---")
+`;
+        }
+
+        function getAwsCliScriptTemplate(region, calls) {
+             if (!calls.trim()) return "#!/bin/bash\\n# Không có chỉ số nào được chọn. Vui lòng chọn ít nhất một chỉ số để tạo script.";
+            return `#!/bin/bash
+# Shell script to export CloudWatch charts using AWS CLI
+# --- CONFIGURATION ---
+AWS_REGION="${region}"
+OUTPUT_DIR="charts"
+# --- SCRIPT ---
+check_tool() {
+  if ! command -v $1 &> /dev/null; then
+    echo "[ERROR] Required tool '$1' is not installed. Please install it." >&2
+    exit 1
+  fi
+}
+echo "--- Starting CloudWatch Chart Export (AWS CLI) ---"
+check_tool aws && check_tool jq
+if ! aws sts get-caller-identity > /dev/null 2>&1; then
+    echo "[ERROR] AWS credentials are not configured or invalid. Run 'aws configure'." >&2
+    exit 1
+fi
+mkdir -p "$OUTPUT_DIR"
+echo "Charts will be saved to '$OUTPUT_DIR/' directory."
+# --- GENERATED CALLS ---
+${calls}
+# -----------------------
+echo "--- Script finished ---"
+`;
+        }
+    </script>
+</body>
+</html>
+
