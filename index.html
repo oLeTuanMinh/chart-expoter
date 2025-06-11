@@ -45,6 +45,10 @@
         .expanded .expand-icon {
             transform: rotate(90deg);
         }
+        .disabled-service {
+            opacity: 0.6;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
@@ -137,41 +141,55 @@
 
     <script type="module">
         // --- DATA DEFINITIONS ---
+        const SERVICES_ORDER = ['alb', 'waf', 'natgateway', 's3', 'rds', 'apigateway', 'lambda', 'ec2'];
+        
         const SERVICES = {
             ec2: { title: "EC2 Instances", placeholder: "i-123abc, i-456def" },
-            alb: { title: "Application Load Balancers", placeholder: "app/my-lb/123, app/another-lb/456" },
+            lambda: { title: "Lambda Functions", placeholder: "my-function-1, my-function-2" },
             rds: { title: "RDS Databases", placeholder: "db-instance-1, db-instance-2" },
-            lambda: { title: "Lambda Functions", placeholder: "my-function-1, my-function-2" }
+            alb: { title: "Application Load Balancers", placeholder: "app/my-lb/123, app/another-lb/456" },
+            s3: { title: "S3 Buckets", placeholder: "my-bucket-name, another-bucket" },
+            apigateway: { title: "API Gateways (REST)", placeholder: "my-api-name, another-api" },
+            natgateway: { title: "NAT Gateways", placeholder: "nat-0123456789abcdef, nat-..." },
+            waf: { title: "WAF WebACLs", placeholder: "my-webacl-name, another-webacl" }
         };
 
-        // **FIXED**: Added "period" and "start" to all definitions to ensure charts have a time range and data.
         const WIDGET_DEFS = {
             ec2: [
                 { name: 'CPUUtilization', def: { "view": "timeSeries", "stacked": false, "title": "EC2 CPU Utilization", "metrics": [["AWS/EC2", "CPUUtilization", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
                 { name: 'NetworkIn', def: { "view": "timeSeries", "stacked": false, "title": "EC2 Network In", "metrics": [["AWS/EC2", "NetworkIn", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: 'NetworkOut', def: { "view": "timeSeries", "stacked": false, "title": "EC2 Network Out", "metrics": [["AWS/EC2", "NetworkOut", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: 'DiskReadBytes', def: { "view": "timeSeries", "stacked": false, "title": "EC2 Disk Read", "metrics": [["AWS/EC2", "DiskReadBytes", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: 'DiskWriteBytes', def: { "view": "timeSeries", "stacked": false, "title": "EC2 Disk Write", "metrics": [["AWS/EC2", "DiskWriteBytes", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
-            ],
-            alb: [
-                { name: 'HealthyHostCount', def: { "view": "timeSeries", "stacked": false, "title": "ALB Healthy Hosts", "metrics": [["AWS/ApplicationELB", "HealthyHostCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
-                { name: 'UnHealthyHostCount', def: { "view": "timeSeries", "stacked": false, "title": "ALB UnHealthy Hosts", "metrics": [["AWS/ApplicationELB", "UnHealthyHostCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
-                { name: 'RequestCount', def: { "view": "timeSeries", "stacked": false, "title": "ALB Request Count", "metrics": [["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: 'HTTPCode_Target_5XX_Count', def: { "view": "timeSeries", "stacked": false, "title": "ALB 5XX Errors", "metrics": [["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: 'TargetConnectionErrorCount', def: { "view": "timeSeries", "stacked": false, "title": "ALB Target Connection Errors", "metrics": [["AWS/ApplicationELB", "TargetConnectionErrorCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
-            ],
-            rds: [
-                { name: 'CPUUtilization', def: { "view": "timeSeries", "stacked": false, "title": "RDS CPU Utilization", "metrics": [["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
-                { name: 'DatabaseConnections', def: { "view": "timeSeries", "stacked": false, "title": "RDS Connections", "metrics": [["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
-                { name: 'FreeableMemory', def: { "view": "timeSeries", "stacked": false, "title": "RDS Freeable Memory", "metrics": [["AWS/RDS", "FreeableMemory", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
-                { name: 'ReadIOPS', def: { "view": "timeSeries", "stacked": false, "title": "RDS Read IOPS", "metrics": [["AWS/RDS", "ReadIOPS", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
-                { name: 'WriteIOPS', def: { "view": "timeSeries", "stacked": false, "title": "RDS Write IOPS", "metrics": [["AWS/RDS", "WriteIOPS", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } }
+                { name: 'NetworkOut', def: { "view": "timeSeries", "stacked": false, "title": "EC2 Network Out", "metrics": [["AWS/EC2", "NetworkOut", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
             ],
             lambda: [
                 { name: 'Invocations', def: { "view": "timeSeries", "stacked": false, "title": "Lambda Invocations", "metrics": [["AWS/Lambda", "Invocations", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
                 { name: 'Errors', def: { "view": "timeSeries", "stacked": false, "title": "Lambda Errors", "metrics": [["AWS/Lambda", "Errors", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: 'Duration', def: { "view": "timeSeries", "stacked": false, "title": "Lambda Duration", "metrics": [["AWS/Lambda", "Duration", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
-                { name: 'Throttles', def: { "view": "timeSeries", "stacked": false, "title": "Lambda Throttles", "metrics": [["AWS/Lambda", "Throttles", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
+                { name: 'Duration', def: { "view": "timeSeries", "stacked": false, "title": "Lambda Duration", "metrics": [["AWS/Lambda", "Duration", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } }
+            ],
+            rds: [
+                { name: 'CPUUtilization', def: { "view": "timeSeries", "stacked": false, "title": "RDS CPU Utilization", "metrics": [["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
+                { name: 'DatabaseConnections', def: { "view": "timeSeries", "stacked": false, "title": "RDS Connections", "metrics": [["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } }
+            ],
+            alb: [
+                { name: 'HealthyHostCount', def: { "view": "timeSeries", "stacked": false, "title": "ALB Healthy Hosts", "metrics": [["AWS/ApplicationELB", "HealthyHostCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
+                { name: 'RequestCount', def: { "view": "timeSeries", "stacked": false, "title": "ALB Request Count", "metrics": [["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
+                { name: 'HTTPCode_Target_5XX_Count', def: { "view": "timeSeries", "stacked": false, "title": "ALB 5XX Errors", "metrics": [["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
+            ],
+            s3: [
+                { name: 'NumberOfObjects', def: { "view": "timeSeries", "stacked": false, "title": "S3 Number of Objects", "metrics": [["AWS/S3", "NumberOfObjects", "BucketName", "ID_PLACEHOLDER", "StorageType", "AllStorageTypes"]], "stat": "Average", "period": 86400, "start": "-P14D" } },
+                { name: 'BucketSizeBytes', def: { "view": "timeSeries", "stacked": false, "title": "S3 Bucket Size (Bytes)", "metrics": [["AWS/S3", "BucketSizeBytes", "BucketName", "ID_PLACEHOLDER", "StorageType", "StandardStorage"]], "stat": "Average", "period": 86400, "start": "-P14D" } }
+            ],
+            apigateway: [
+                { name: 'Count', def: { "view": "timeSeries", "stacked": false, "title": "API GW Request Count", "metrics": [["AWS/ApiGateway", "Count", "ApiName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
+                { name: '4XXError', def: { "view": "timeSeries", "stacked": false, "title": "API GW 4XX Errors", "metrics": [["AWS/ApiGateway", "4XXError", "ApiName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
+                { name: '5XXError', def: { "view": "timeSeries", "stacked": false, "title": "API GW 5XX Errors", "metrics": [["AWS/ApiGateway", "5XXError", "ApiName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
+            ],
+            natgateway: [
+                { name: 'ActiveConnectionCount', def: { "view": "timeSeries", "stacked": false, "title": "NAT GW Active Connections", "metrics": [["AWS/NATGateway", "ActiveConnectionCount", "NatGatewayId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
+                { name: 'BytesOutToDestination', def: { "view": "timeSeries", "stacked": false, "title": "NAT GW Bytes Out", "metrics": [["AWS/NATGateway", "BytesOutToDestination", "NatGatewayId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
+            ],
+            waf: [
+                { name: 'AllowedRequests', def: { "view": "timeSeries", "stacked": false, "title": "WAF Allowed Requests", "metrics": [["AWS/WAFV2", "AllowedRequests", "WebACL", "ID_PLACEHOLDER", "Region", "REGION_PLACEHOLDER", "Rule", "ALL"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
+                { name: 'BlockedRequests', def: { "view": "timeSeries", "stacked": false, "title": "WAF Blocked Requests", "metrics": [["AWS/WAFV2", "BlockedRequests", "WebACL", "ID_PLACEHOLDER", "Region", "REGION_PLACEHOLDER", "Rule", "ALL"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
             ]
         };
 
@@ -194,7 +212,9 @@
 
         // --- UI Builder ---
         function buildServicesUI() {
-            for (const [key, service] of Object.entries(SERVICES)) {
+            let finalHtml = '';
+            SERVICES_ORDER.forEach(key => {
+                const service = SERVICES[key];
                 const metrics = WIDGET_DEFS[key];
                 const metricsHtml = metrics.map(metric => `
                     <div class="py-1">
@@ -205,7 +225,7 @@
                     </div>
                 `).join('');
 
-                const serviceHtml = `
+                finalHtml += `
                     <div class="p-4 border dark:border-gray-700 rounded-lg">
                         <div class="flex items-center justify-between cursor-pointer" data-toggle-metrics="${key}">
                             <label class="inline-flex items-center font-semibold text-lg text-gray-800 dark:text-gray-200">
@@ -219,8 +239,24 @@
                             ${metricsHtml}
                         </div>
                     </div>`;
-                servicesContainer.innerHTML += serviceHtml;
-            }
+            });
+            
+            // Add GuardDuty explanation block
+            finalHtml += `
+                <div class="p-4 border border-yellow-400 dark:border-yellow-600 bg-yellow-50 dark:bg-gray-800 rounded-lg opacity-70">
+                    <div class="flex items-center justify-between">
+                        <label class="inline-flex items-center font-semibold text-lg text-gray-800 dark:text-gray-200">
+                            <input type="checkbox" class="form-checkbox h-5 w-5 rounded mr-3" disabled>
+                            GuardDuty
+                        </label>
+                    </div>
+                    <div class="mt-2 text-sm text-yellow-800 dark:text-yellow-200">
+                        <strong>Lưu ý:</strong> GuardDuty không tự động gửi chỉ số về CloudWatch. Để có biểu đồ, bạn cần thiết lập EventBridge và Lambda để tạo Custom Metrics từ các phát hiện của GuardDuty.
+                    </div>
+                </div>`;
+
+
+            servicesContainer.innerHTML = finalHtml;
         }
         
         // --- Event Listeners ---
@@ -244,7 +280,7 @@
                 }
                 
                 if (target.classList.contains('service-master-check')) {
-                    const serviceKey = target.id.split('-')[1];
+                    const serviceKey = target.id.replace('check-', '');
                     const metrics = document.querySelectorAll(`.metric-check[data-service="${serviceKey}"]`);
                     metrics.forEach(metric => metric.checked = target.checked);
                 }
@@ -267,9 +303,12 @@
             let pythonCalls = [];
             let cliCalls = [];
 
-            for (const [serviceKey, serviceData] of Object.entries(SERVICES)) {
-                const ids = document.getElementById(`ids-${serviceKey}`).value.split(',').map(id => id.trim()).filter(id => id);
-                if (ids.length === 0) continue;
+            SERVICES_ORDER.forEach(serviceKey => {
+                const idsInput = document.getElementById(`ids-${serviceKey}`);
+                if (!idsInput) return;
+
+                const ids = idsInput.value.split(',').map(id => id.trim()).filter(id => id);
+                if (ids.length === 0) return;
 
                 for (const widget of WIDGET_DEFS[serviceKey]) {
                     const metricCheckbox = document.getElementById(`check-${serviceKey}-${widget.name}`);
@@ -280,16 +319,25 @@
                         widgetDef.metrics[0][3] = id;
                         widgetDef.title = `${id} - ${widget.name}`;
                         widgetDef.region = region;
+
+                        // Special handling for WAF metrics which require Region as a dimension
+                        if (serviceKey === 'waf') {
+                            const regionDimIndex = widgetDef.metrics[0].indexOf('REGION_PLACEHOLDER');
+                            if (regionDimIndex > -1) {
+                                widgetDef.metrics[0][regionDimIndex] = region;
+                            }
+                        }
                         
                         const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_');
                         const filename = `${serviceKey}_${safeId}_${widget.name}.png`;
                         
-                        const pythonSafeId = safeId.replace(/-/g, '_');
+                        const pythonSafeId = safeId.replace(/[-/]/g, '_');
+                        const pythonVarName = `widget_json_${pythonSafeId}_${widget.name.replace(/[^a-zA-Z0-9_]/g, '')}`;
                         pythonCalls.push(`
     # --- Chart for ${id} (${widget.name}) ---
     print(f"Generating chart for ${id}: ${widget.name}...")
-    widget_json_${pythonSafeId}_${widget.name} = ${JSON.stringify(widgetDef, null, 4)}
-    get_metric_image(widget_json_${pythonSafeId}_${widget.name}, "${filename}")`);
+    ${pythonVarName} = ${JSON.stringify(widgetDef, null, 4)}
+    get_metric_image(${pythonVarName}, "${filename}")`);
                         
                         const cliWidgetJson = JSON.stringify(widgetDef);
                         cliCalls.push(`
@@ -300,7 +348,7 @@ aws cloudwatch get-metric-widget-image --region $AWS_REGION --metric-widget "$ME
 if [ $? -eq 0 ]; then echo "  Success: ${filename}"; else echo "  [ERROR] Failed to create ${filename}"; fi`);
                     }
                 }
-            }
+            });
 
             generatedScripts.python = getPythonScriptTemplate(region, pythonCalls.join(''));
             generatedScripts.cli = getAwsCliScriptTemplate(region, cliCalls.join(''));
@@ -405,4 +453,3 @@ echo "--- Script finished ---"
     </script>
 </body>
 </html>
-
