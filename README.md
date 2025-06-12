@@ -1,0 +1,2 @@
+- Chọn AWS Profile 
+- Thêm API GW HTTP
