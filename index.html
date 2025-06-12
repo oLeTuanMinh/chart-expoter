@@ -45,10 +45,6 @@
         .expanded .expand-icon {
             transform: rotate(90deg);
         }
-        .disabled-service {
-            opacity: 0.6;
-            pointer-events: none;
-        }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
@@ -71,23 +67,30 @@
                     <div class="space-y-6">
                         <div>
                            <h2 class="text-xl font-semibold mb-3 text-gray-900 dark:text-white">1. Cấu hình chung</h2>
-                           <label for="aws-region" class="block text-sm font-medium text-gray-700 dark:text-gray-300">AWS Region</label>
-                           <select id="aws-region" class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2.5">
-                                <option>us-east-1</option>
-                                <option>us-east-2</option>
-                                <option>us-west-1</option>
-                                <option>us-west-2</option>
-                                <option>ap-southeast-1</option>
-                                <option>ap-southeast-2</option>
-                                <option>ap-northeast-1</option>
-                                <option>eu-central-1</option>
-                           </select>
+                           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="aws-region" class="block text-sm font-medium text-gray-700 dark:text-gray-300">AWS Region</label>
+                                    <select id="aws-region" class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2.5">
+                                        <option>us-east-1</option>
+                                        <option>us-east-2</option>
+                                        <option>us-west-1</option>
+                                        <option>us-west-2</option>
+                                        <option>ap-southeast-1</option>
+                                        <option>ap-southeast-2</option>
+                                        <option>ap-northeast-1</option>
+                                        <option>eu-central-1</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="aws-profile" class="block text-sm font-medium text-gray-700 dark:text-gray-300">AWS Profile (Tùy chọn)</label>
+                                    <input type="text" id="aws-profile" class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2.5" placeholder="default">
+                                </div>
+                           </div>
                         </div>
                         <div>
                             <h2 class="text-xl font-semibold mb-3 text-gray-900 dark:text-white">2. Chọn Dịch vụ và Chỉ số</h2>
                             <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Nhập ID tài nguyên (cách nhau bởi dấu phẩy) và chọn các chỉ số cần xuất.</p>
                             
-                            <!-- Service Toggles -->
                             <div class="space-y-4" id="services-container">
                                 <!-- Service blocks will be dynamically generated here -->
                             </div>
@@ -121,7 +124,7 @@
                             <p class="font-bold">Hướng dẫn (Python)</p>
                             <ol class="list-decimal list-inside mt-2 text-sm">
                                 <li>Cài đặt Boto3: `pip install boto3`</li>
-                                <li>Cấu hình AWS credentials: `aws configure`</li>
+                                <li>Cấu hình AWS credentials: `aws configure` (nếu dùng profile, đảm bảo profile tồn tại)</li>
                                 <li>Lưu script thành `export_charts.py`, tạo thư mục `charts` và chạy: `python export_charts.py`</li>
                             </ol>
                         </div>
@@ -129,7 +132,7 @@
                             <p class="font-bold">Hướng dẫn (AWS CLI)</p>
                              <ol class="list-decimal list-inside mt-2 text-sm">
                                 <li>Yêu cầu: `aws-cli` và `jq` đã được cài đặt.</li>
-                                <li>Cấu hình AWS credentials: `aws configure`</li>
+                                <li>Cấu hình AWS credentials: `aws configure` (nếu dùng profile, đảm bảo profile tồn tại)</li>
                                 <li>Lưu script thành `export_charts.sh`, cấp quyền (`chmod +x export_charts.sh`) và chạy: `./export_charts.sh`</li>
                             </ol>
                         </div>
@@ -141,7 +144,7 @@
 
     <script type="module">
         // --- DATA DEFINITIONS ---
-        const SERVICES_ORDER = ['alb', 'waf', 'natgateway', 's3', 'rds', 'apigateway', 'lambda', 'ec2'];
+        const SERVICES_ORDER = ['alb', 'waf', 'natgateway', 's3', 'rds', 'apigw_rest', 'apigw_http', 'lambda', 'ec2'];
         
         const SERVICES = {
             ec2: { title: "EC2 Instances", placeholder: "i-123abc, i-456def" },
@@ -149,50 +152,66 @@
             rds: { title: "RDS Databases", placeholder: "db-instance-1, db-instance-2" },
             alb: { title: "Application Load Balancers", placeholder: "app/my-lb/123, app/another-lb/456" },
             s3: { title: "S3 Buckets", placeholder: "my-bucket-name, another-bucket" },
-            apigateway: { title: "API Gateways (REST)", placeholder: "my-api-name, another-api" },
+            apigw_rest: { title: "API Gateway REST", placeholder: "my-api-name, another-api" },
+            apigw_http: { title: "API Gateway HTTP", placeholder: "abcdef123 (API ID)" },
             natgateway: { title: "NAT Gateways", placeholder: "nat-0123456789abcdef, nat-..." },
             waf: { title: "WAF WebACLs", placeholder: "my-webacl-name, another-webacl" }
         };
 
         const WIDGET_DEFS = {
             ec2: [
-                { name: 'CPUUtilization', def: { "view": "timeSeries", "stacked": false, "title": "EC2 CPU Utilization", "metrics": [["AWS/EC2", "CPUUtilization", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
-                { name: 'NetworkIn', def: { "view": "timeSeries", "stacked": false, "title": "EC2 Network In", "metrics": [["AWS/EC2", "NetworkIn", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: 'NetworkOut', def: { "view": "timeSeries", "stacked": false, "title": "EC2 Network Out", "metrics": [["AWS/EC2", "NetworkOut", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
+                { name: 'CPUUtilization', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/EC2", "CPUUtilization", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Average" } },
+                { name: 'NetworkIn', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/EC2", "NetworkIn", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum" } },
+                { name: 'NetworkOut', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/EC2", "NetworkOut", "InstanceId", "ID_PLACEHOLDER"]], "stat": "Sum" } }
             ],
             lambda: [
-                { name: 'Invocations', def: { "view": "timeSeries", "stacked": false, "title": "Lambda Invocations", "metrics": [["AWS/Lambda", "Invocations", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: 'Errors', def: { "view": "timeSeries", "stacked": false, "title": "Lambda Errors", "metrics": [["AWS/Lambda", "Errors", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: 'Duration', def: { "view": "timeSeries", "stacked": false, "title": "Lambda Duration", "metrics": [["AWS/Lambda", "Duration", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } }
+                { name: 'Invocations', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/Lambda", "Invocations", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Sum" } },
+                { name: 'Errors', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/Lambda", "Errors", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Sum" } },
+                { name: 'Duration', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/Lambda", "Duration", "FunctionName", "ID_PLACEHOLDER"]], "stat": "Average" } }
             ],
             rds: [
-                { name: 'CPUUtilization', def: { "view": "timeSeries", "stacked": false, "title": "RDS CPU Utilization", "metrics": [["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
-                { name: 'DatabaseConnections', def: { "view": "timeSeries", "stacked": false, "title": "RDS Connections", "metrics": [["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } }
+                { name: 'CPUUtilization', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average" } },
+                { name: 'DatabaseConnections', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "ID_PLACEHOLDER"]], "stat": "Average" } }
             ],
             alb: [
-                { name: 'HealthyHostCount', def: { "view": "timeSeries", "stacked": false, "title": "ALB Healthy Hosts", "metrics": [["AWS/ApplicationELB", "HealthyHostCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Average", "period": 300, "start": "-PT3H" } },
-                { name: 'RequestCount', def: { "view": "timeSeries", "stacked": false, "title": "ALB Request Count", "metrics": [["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: 'HTTPCode_Target_5XX_Count', def: { "view": "timeSeries", "stacked": false, "title": "ALB 5XX Errors", "metrics": [["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
+                { name: 'HealthyHostCount', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/ApplicationELB", "HealthyHostCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Average" } },
+                { name: 'RequestCount', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Sum" } },
+                { name: 'HTTPCode_Target_5XX_Count', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", "ID_PLACEHOLDER"]], "stat": "Sum" } }
             ],
             s3: [
-                { name: 'NumberOfObjects', def: { "view": "timeSeries", "stacked": false, "title": "S3 Number of Objects", "metrics": [["AWS/S3", "NumberOfObjects", "BucketName", "ID_PLACEHOLDER", "StorageType", "AllStorageTypes"]], "stat": "Average", "period": 86400, "start": "-P14D" } },
-                { name: 'BucketSizeBytes', def: { "view": "timeSeries", "stacked": false, "title": "S3 Bucket Size (Bytes)", "metrics": [["AWS/S3", "BucketSizeBytes", "BucketName", "ID_PLACEHOLDER", "StorageType", "StandardStorage"]], "stat": "Average", "period": 86400, "start": "-P14D" } }
+                { name: 'NumberOfObjects', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/S3", "NumberOfObjects", "BucketName", "ID_PLACEHOLDER", "StorageType", "AllStorageTypes"]], "stat": "Average" } },
+                { name: 'BucketSizeBytes', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/S3", "BucketSizeBytes", "BucketName", "ID_PLACEHOLDER", "StorageType", "StandardStorage"]], "stat": "Average" } }
             ],
-            apigateway: [
-                { name: 'Count', def: { "view": "timeSeries", "stacked": false, "title": "API GW Request Count", "metrics": [["AWS/ApiGateway", "Count", "ApiName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: '4XXError', def: { "view": "timeSeries", "stacked": false, "title": "API GW 4XX Errors", "metrics": [["AWS/ApiGateway", "4XXError", "ApiName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: '5XXError', def: { "view": "timeSeries", "stacked": false, "title": "API GW 5XX Errors", "metrics": [["AWS/ApiGateway", "5XXError", "ApiName", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
+            apigw_rest: [
+                { name: 'Count', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/ApiGateway", "Count", "ApiName", "ID_PLACEHOLDER"]], "stat": "Sum" } },
+                { name: '4XXError', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/ApiGateway", "4XXError", "ApiName", "ID_PLACEHOLDER"]], "stat": "Sum" } },
+                { name: '5XXError', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/ApiGateway", "5XXError", "ApiName", "ID_PLACEHOLDER"]], "stat": "Sum" } },
+                { name: 'Latency', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/ApiGateway", "Latency", "ApiName", "ID_PLACEHOLDER"]], "stat": "Average" } }
+            ],
+             apigw_http: [
+                { name: 'Requests', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/ApiGateway", "Count", "ApiId", "ID_PLACEHOLDER"]], "stat": "Sum" } },
+                { name: '4xxCount', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/ApiGateway", "4xxCount", "ApiId", "ID_PLACEHOLDER"]], "stat": "Sum" } },
+                { name: '5xxCount', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/ApiGateway", "5xxCount", "ApiId", "ID_PLACEHOLDER"]], "stat": "Sum" } },
+                { name: 'Latency', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/ApiGateway", "Latency", "ApiId", "ID_PLACEHOLDER"]], "stat": "Average" } }
             ],
             natgateway: [
-                { name: 'ActiveConnectionCount', def: { "view": "timeSeries", "stacked": false, "title": "NAT GW Active Connections", "metrics": [["AWS/NATGateway", "ActiveConnectionCount", "NatGatewayId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: 'BytesOutToDestination', def: { "view": "timeSeries", "stacked": false, "title": "NAT GW Bytes Out", "metrics": [["AWS/NATGateway", "BytesOutToDestination", "NatGatewayId", "ID_PLACEHOLDER"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
+                { name: 'ActiveConnectionCount', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/NATGateway", "ActiveConnectionCount", "NatGatewayId", "ID_PLACEHOLDER"]], "stat": "Sum" } },
+                { name: 'BytesOutToDestination', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/NATGateway", "BytesOutToDestination", "NatGatewayId", "ID_PLACEHOLDER"]], "stat": "Sum" } }
             ],
             waf: [
-                { name: 'AllowedRequests', def: { "view": "timeSeries", "stacked": false, "title": "WAF Allowed Requests", "metrics": [["AWS/WAFV2", "AllowedRequests", "WebACL", "ID_PLACEHOLDER", "Region", "REGION_PLACEHOLDER", "Rule", "ALL"]], "stat": "Sum", "period": 300, "start": "-PT3H" } },
-                { name: 'BlockedRequests', def: { "view": "timeSeries", "stacked": false, "title": "WAF Blocked Requests", "metrics": [["AWS/WAFV2", "BlockedRequests", "WebACL", "ID_PLACEHOLDER", "Region", "REGION_PLACEHOLDER", "Rule", "ALL"]], "stat": "Sum", "period": 300, "start": "-PT3H" } }
+                { name: 'AllowedRequests', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/WAFV2", "AllowedRequests", "WebACL", "ID_PLACEHOLDER", "Region", "REGION_PLACEHOLDER", "Rule", "ALL"]], "stat": "Sum" } },
+                { name: 'BlockedRequests', def: { "view": "timeSeries", "stacked": false, "metrics": [["AWS/WAFV2", "BlockedRequests", "WebACL", "ID_PLACEHOLDER", "Region", "REGION_PLACEHOLDER", "Rule", "ALL"]], "stat": "Sum" } }
             ]
         };
 
+        const PERIOD_OPTIONS = {
+            "60": "1 phút",
+            "300": "5 phút",
+            "900": "15 phút",
+            "1800": "30 phút",
+            "86400": "1 ngày"
+        };
+        
         // --- DOM Elements ---
         const generateBtn = document.getElementById('generate-btn');
         const copyBtn = document.getElementById('copy-btn');
@@ -225,14 +244,21 @@
                     </div>
                 `).join('');
 
+                const periodOptionsHtml = Object.entries(PERIOD_OPTIONS).map(([val, text]) =>
+                    `<option value="${val}" ${val === '300' ? 'selected' : ''}>${text}</option>`
+                ).join('');
+
                 finalHtml += `
                     <div class="p-4 border dark:border-gray-700 rounded-lg">
-                        <div class="flex items-center justify-between cursor-pointer" data-toggle-metrics="${key}">
-                            <label class="inline-flex items-center font-semibold text-lg text-gray-800 dark:text-gray-200">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <label class="inline-flex items-center font-semibold text-lg text-gray-800 dark:text-gray-200 cursor-pointer" data-toggle-metrics="${key}">
                                 <input type="checkbox" id="check-${key}" class="form-checkbox h-5 w-5 text-indigo-600 rounded service-master-check mr-3">
                                 ${service.title}
+                                <svg class="w-5 h-5 text-gray-500 expand-icon ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                             </label>
-                            <svg class="w-5 h-5 text-gray-500 expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            <select id="period-${key}" class="bg-gray-50 dark:bg-gray-600 border-gray-300 dark:border-gray-500 rounded-md shadow-sm p-1 text-sm">
+                                ${periodOptionsHtml}
+                            </select>
                         </div>
                         <textarea id="ids-${key}" class="mt-2 block w-full bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md shadow-sm font-mono text-sm p-2" rows="2" placeholder="${service.placeholder}"></textarea>
                         <div id="metrics-${key}" class="metric-list mt-3 pl-4 border-l-2 border-gray-200 dark:border-gray-600 space-y-1">
@@ -241,7 +267,6 @@
                     </div>`;
             });
             
-            // Add GuardDuty explanation block
             finalHtml += `
                 <div class="p-4 border border-yellow-400 dark:border-yellow-600 bg-yellow-50 dark:bg-gray-800 rounded-lg opacity-70">
                     <div class="flex items-center justify-between">
@@ -251,10 +276,9 @@
                         </label>
                     </div>
                     <div class="mt-2 text-sm text-yellow-800 dark:text-yellow-200">
-                        <strong>Lưu ý:</strong> GuardDuty không tự động gửi chỉ số về CloudWatch. Để có biểu đồ, bạn cần thiết lập EventBridge và Lambda để tạo Custom Metrics từ các phát hiện của GuardDuty.
+                        <strong>Lưu ý:</strong> GuardDuty không tự động gửi chỉ số về CloudWatch. Để có biểu đồ, bạn cần thiết lập EventBridge và Lambda để tạo Custom Metrics.
                     </div>
                 </div>`;
-
 
             servicesContainer.innerHTML = finalHtml;
         }
@@ -274,9 +298,8 @@
                 const toggler = target.closest('[data-toggle-metrics]');
                 if (toggler) {
                     const serviceKey = toggler.dataset.toggleMetrics;
-                    const metricList = document.getElementById(`metrics-${serviceKey}`);
-                    metricList.classList.toggle('expanded');
-                    toggler.classList.toggle('expanded');
+                    document.getElementById(`metrics-${serviceKey}`).classList.toggle('expanded');
+                    toggler.querySelector('.expand-icon').parentElement.parentElement.classList.toggle('expanded');
                 }
                 
                 if (target.classList.contains('service-master-check')) {
@@ -297,9 +320,16 @@
             });
         }
         
+        function getStartTimeForPeriod(periodInSeconds) {
+            if (periodInSeconds >= 86400) return "-P14D"; // 14 days for daily
+            if (periodInSeconds >= 900) return "-P1D"; // 1 day for 15/30 min
+            return "-PT3H"; // 3 hours for 1/5 min
+        }
+
         // --- Script Generation ---
         function generateAllScripts() {
             const region = document.getElementById('aws-region').value;
+            const profile = document.getElementById('aws-profile').value.trim();
             let pythonCalls = [];
             let cliCalls = [];
 
@@ -310,6 +340,9 @@
                 const ids = idsInput.value.split(',').map(id => id.trim()).filter(id => id);
                 if (ids.length === 0) return;
 
+                const period = document.getElementById(`period-${serviceKey}`).value;
+                const start = getStartTimeForPeriod(parseInt(period));
+
                 for (const widget of WIDGET_DEFS[serviceKey]) {
                     const metricCheckbox = document.getElementById(`check-${serviceKey}-${widget.name}`);
                     if (!metricCheckbox || !metricCheckbox.checked) continue;
@@ -319,13 +352,12 @@
                         widgetDef.metrics[0][3] = id;
                         widgetDef.title = `${id} - ${widget.name}`;
                         widgetDef.region = region;
+                        widgetDef.period = parseInt(period);
+                        widgetDef.start = start;
 
-                        // Special handling for WAF metrics which require Region as a dimension
                         if (serviceKey === 'waf') {
                             const regionDimIndex = widgetDef.metrics[0].indexOf('REGION_PLACEHOLDER');
-                            if (regionDimIndex > -1) {
-                                widgetDef.metrics[0][regionDimIndex] = region;
-                            }
+                            if (regionDimIndex > -1) widgetDef.metrics[0][regionDimIndex] = region;
                         }
                         
                         const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -344,14 +376,14 @@
 # --- Chart for ${id} (${widget.name}) ---
 echo "Generating chart for ${id}: ${widget.name}..."
 METRIC_WIDGET_JSON='${cliWidgetJson}'
-aws cloudwatch get-metric-widget-image --region $AWS_REGION --metric-widget "$METRIC_WIDGET_JSON" --output json | jq -r .MetricWidgetImage | base64 --decode > "$OUTPUT_DIR/${filename}"
+aws cloudwatch get-metric-widget-image --region $AWS_REGION ${profile ? '--profile ' + profile : ''} --metric-widget "$METRIC_WIDGET_JSON" --output json | jq -r .MetricWidgetImage | base64 --decode > "$OUTPUT_DIR/${filename}"
 if [ $? -eq 0 ]; then echo "  Success: ${filename}"; else echo "  [ERROR] Failed to create ${filename}"; fi`);
                     }
                 }
             });
 
-            generatedScripts.python = getPythonScriptTemplate(region, pythonCalls.join(''));
-            generatedScripts.cli = getAwsCliScriptTemplate(region, cliCalls.join(''));
+            generatedScripts.python = getPythonScriptTemplate(region, profile, pythonCalls.join(''));
+            generatedScripts.cli = getAwsCliScriptTemplate(region, profile, cliCalls.join(''));
             
             document.getElementById('output-section').classList.remove('hidden');
         }
@@ -381,14 +413,18 @@ if [ $? -eq 0 ]; then echo "  Success: ${filename}"; else echo "  [ERROR] Failed
         }
         
         // --- Template Generators ---
-        function getPythonScriptTemplate(region, calls) {
+        function getPythonScriptTemplate(region, profile, calls) {
             if (!calls.trim()) return "# Không có chỉ số nào được chọn. Vui lòng chọn ít nhất một chỉ số để tạo script.";
+            const profileLine = profile ? `AWS_PROFILE = "${profile}"` : 'AWS_PROFILE = None';
+            const sessionLine = profile ? `session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)` : `session = boto3.Session(region_name=AWS_REGION)`;
+
             return `import boto3
 import json
 import os
 import sys
 # --- CONFIGURATION ---
 AWS_REGION = "${region}"
+${profileLine}
 OUTPUT_DIR = "charts"
 # --- MAIN SCRIPT ---
 def get_metric_image(widget_definition, filename):
@@ -409,11 +445,11 @@ if __name__ == "__main__":
         print(f"Creating output directory: {OUTPUT_DIR}")
         os.makedirs(OUTPUT_DIR)
     try:
-        session = boto3.Session(region_name=AWS_REGION)
+        ${sessionLine}
         cloudwatch_client = session.client('cloudwatch')
         cloudwatch_client.list_metrics(MaxItems=1)
     except Exception as e:
-        print(f"[FATAL] Could not connect to AWS. Check credentials and region. Error: {e}", file=sys.stderr)
+        print(f"[FATAL] Could not connect to AWS. Check credentials, region and profile. Error: {e}", file=sys.stderr)
         sys.exit(1)
     # --- GENERATED CALLS ---
 ${calls}
@@ -422,12 +458,16 @@ ${calls}
 `;
         }
 
-        function getAwsCliScriptTemplate(region, calls) {
+        function getAwsCliScriptTemplate(region, profile, calls) {
              if (!calls.trim()) return "#!/bin/bash\\n# Không có chỉ số nào được chọn. Vui lòng chọn ít nhất một chỉ số để tạo script.";
+            const profileExport = profile ? `export AWS_PROFILE="${profile}"` : '# No profile specified, using default';
+            const profileFlag = profile ? ` --profile "$AWS_PROFILE"` : '';
+
             return `#!/bin/bash
 # Shell script to export CloudWatch charts using AWS CLI
 # --- CONFIGURATION ---
 AWS_REGION="${region}"
+${profileExport}
 OUTPUT_DIR="charts"
 # --- SCRIPT ---
 check_tool() {
@@ -438,8 +478,8 @@ check_tool() {
 }
 echo "--- Starting CloudWatch Chart Export (AWS CLI) ---"
 check_tool aws && check_tool jq
-if ! aws sts get-caller-identity > /dev/null 2>&1; then
-    echo "[ERROR] AWS credentials are not configured or invalid. Run 'aws configure'." >&2
+if ! aws sts get-caller-identity${profileFlag} > /dev/null 2>&1; then
+    echo "[ERROR] AWS credentials are not configured or invalid. Run 'aws configure' or check profile name." >&2
     exit 1
 fi
 mkdir -p "$OUTPUT_DIR"
